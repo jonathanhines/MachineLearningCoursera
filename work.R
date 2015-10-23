@@ -69,7 +69,25 @@ test.results <- predict(modFit,final.testing.PC)
 ##   7. Also try to tune other parameters nodes, mtry, proximity,,.. 
 ## NOTE: Do not go too overboard as you will end up over-fitting the model. 
 
-print(test.results)
+varImpPlot(modFit$finalModel)
+modFit.varImp <- varImp(modFit$finalModel)
+# Display the importance as text
+modFit.varImp[order(modFit.varImp$Overall,decreasing = T),,drop=F]
+# Note that the user name values drops off much more quickly than the rest so drop it
+
+modFit_noUser <- train(work.classe.training ~ . - user_name,method="rf",data=work.training.PC)
+modFit_noUser
+confusionMatrix(work.classe.training,predict(modFit_noUser,work.training.PC))
+confusionMatrix(work.classe.testing,predict(modFit_noUser,work.testing.PC))
+varImpPlot(modFit_noUser$finalModel)
+modFit_noUser.varImp <- varImp(modFit_noUser$finalModel)
+modFit_noUser.varImp[order(modFit_noUser.varImp$Overall,decreasing = T),,drop=F]
+
+test.results.no_user <- predict(modFit_noUser,final.testing.PC)
+print(test.results.no_user)
+
+
+
 pml_write_files = function(x){
   n = length(x)
   for(i in 1:n){
@@ -77,5 +95,4 @@ pml_write_files = function(x){
     write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
   }
 }
-pml_write_files(test.results)
-
+pml_write_files(test.results.no_user)
