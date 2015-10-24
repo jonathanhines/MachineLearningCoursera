@@ -23,11 +23,11 @@ testing.filtered <- testing[,colSums(is.na(testing))==0 & !( names(testing) %in%
 testing.problem_id <- testing$problem_id
 
 ## 3 - Do some visualizations of the data to get a feel for it
-# ggplot(dat=training.filtered,
-# aes(x=classe,y=magnet_dumbbell_x,colour=user_name)) +
-# geom_dotplot(binaxis="y"
-#   ,binwidth=diff(range(training.filtered$magnet_dumbbell_x))/500,
-#   ,stackdir="center")
+ ggplot(dat=training.filtered,
+ aes(x=classe,y=magnet_dumbbell_x,colour=user_name)) +
+ geom_dotplot(binaxis="y"
+   ,binwidth=diff(range(training.filtered$magnet_dumbbell_x))/500,
+   ,stackdir="center")
 
 
 ## 4 - Split our training set to get a good feel for what models will be most effective

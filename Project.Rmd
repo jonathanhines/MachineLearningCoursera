@@ -1,0 +1,170 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Jonathan Hines"
+date: "October 24, 2015"
+output: 
+  html_document: 
+    keep_md: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+# Introduction
+The purpose of this study is to build a machine learning model based on the dataset found here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+Once a suitable model has been created, it should be checked against the following test data which does not have the class recorded:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+This data a serries of measurements taken from 6 participants who did barbell lifts in a variety of different classes A through E.  Class A corresponds to correctly performing the exercise while the remaning classes are different types of errors that are common for that exercise.  The training dataset contains a column with the heading Classe which lists Class of a particular exercise.  Each row corresponds to a particular point in time and measurements recorded from accelerometers mounted on the barbell, belt and fore arm of a particular participant.  This data comes from the study described here:
+
+[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har)
+
+# Data Cleaning and Exploration
+
+Reading in the data set provides two data frames:
+```{r read_data}
+training <- read.csv("./pml-training.csv")
+testing <- read.csv("./pml-testing.csv")
+```
+
+Review of the test and training data sets indicates that many of the columns in the training and test set are empty or marked N/A.  Since we will need to validate against the test set and some all populated columns of the test set are found in the training set, all columns not found in the test set are removed from both of the data sets.  In addition, the training set is taken over windows in time.  Since the test set consists of only 20 lines which are unique entries in time, it is not useful to build a model using time specific information.  The filered data sets are constructed by removing empty columns, results, indicies and time related information.  Results and problem id's are stored separately for later use.
+
+```{r filter_data}
+removed.columns <- c(
+  "X",
+  "raw_timestamp_part_1",
+  "raw_timestamp_part_2",
+  "cvtd_timestamp",
+  "new_window",
+  "num_window",
+  "classe",
+  "problem_id"
+)
+training.filtered <- training[,colSums(is.na(testing))==0 & !( names(training) %in% removed.columns )]
+training.classe <- training$classe
+
+testing.filtered <- testing[,colSums(is.na(testing))==0 & !( names(testing) %in% removed.columns )]
+testing.problem_id <- testing$problem_id
+dim(training.filtered)
+dim(testing.filtered)
+names(training.filtered)
+```
+
+In order to provide cross validation the training dataset was split into a two sets a working training set and a working testing set.  The data was split randomly with 0.75% in the training set.
+
+```{r partition_data}
+library(caret)
+set.seed(2132)
+inTrain = createDataPartition(training.classe, p = 3/4)[[1]]
+work.training = training.filtered[ inTrain,]
+work.testing = training.filtered[-inTrain,]
+work.classe.training <- training.classe[inTrain]
+work.classe.testing <- training.classe[-inTrain]
+```
+
+The user name of the participant is present in both the training and test data sets.  It is unclear whether or not this is useful information as shown here, actual values recorded seem heavily dependent on user but when plotted by user, the class doesn't separate out into clusters as one might hope.
+
+```{r plot_user_name_effect_sample}
+ggplot(data=training.filtered,
+  aes(x=training.classe,y=magnet_belt_y,colour=user_name,fill=user_name)) +
+  geom_dotplot(binaxis="y"
+    ,binwidth=diff(range(training.filtered$magnet_belt_y))/500,
+    ,stackdir="center")
+```
+
+It may make sense to normalize on user for live studies but as shown below this was not necessary in this study.
+
+# Machine Learning Model Construction
+
+This is a classification problem, so an algorithm that generates classification trees will work well here.  As the measurements recorded are various components of motion from the same sensors, it is very likely that the features are highly demendant.  To reduce the number of features, principal components were computed to account for 90% of the variance in the orignal data set features.
+
+```{r preprocess_features}
+preProc <- preProcess(work.training, method = "pca", thres = 0.9)
+## Get PC training data
+work.training.PC <- predict(preProc,work.training)
+work.testing.PC <- predict(preProc,work.testing)
+final.testing.PC <- predict(preProc,testing.filtered)
+names(work.training.PC)
+```
+
+Plotting the first and second primary components suggsets that the classes are starting to cluster although user is still very important to the actual values recorded as seen in the 5 clusters below.
+
+```{r sample_primary_features_plot}
+qplot(work.training.PC$PC1,work.training.PC$PC2,color=work.classe.training)
+```
+
+
+To determine an optimum classification tree the random forests algorithm was employed with all primary components and the user name included:
+
+```{r generate_model_1, eval=FALSE}
+modFit <- train(work.classe.training ~ .,method="rf",data=work.training.PC)
+```
+
+This model took over an hour to compute and was cached after the first time it was computed.
+
+```{r load_model_1, echo=FALSE}
+#saveRDS(modFit,"./random_forests_model.RDS")
+modFit <- readRDS("./random_forests_model.RDS")
+```
+
+Here is the model and confusion matricies for the work taining and testing primary component datasets
+
+```{r display_model_1_results}
+modFit
+confusionMatrix(work.classe.training,predict(modFit,work.training.PC))
+confusionMatrix(work.classe.testing,predict(modFit,work.testing.PC))
+```
+
+The out of sample error estimate suggested above from the work testing dataset is:
+
+1 - Accuracy = 1 - 0.9753 = 0.0247
+
+Or about 2.5%.  To assess the importance of each of the features to the model, take a look at their Gini importance decrease:
+
+```{r plot_model_1_importance}
+varImpPlot(modFit$finalModel)
+```
+
+Based on the above plot, the value of user name does not have a large importance for the model, to reduce overfitting we will re-run the model excluding the user name feature.
+
+```{r generate_model_2, eval=FALSE}
+modFit_noUser <- train(work.classe.training ~ . - user_name,method="rf",data=work.training.PC)
+```
+
+```{r load_model_2, echo=FALSE}
+#saveRDS(modFit,"./random_forests_model_no_user.RDS")
+modFit_noUser <- readRDS("./random_forests_model_no_user.RDS")
+```
+
+```{r display_model_2_results}
+modFit_noUser
+confusionMatrix(work.classe.training,predict(modFit_noUser,work.training.PC))
+confusionMatrix(work.classe.testing,predict(modFit_noUser,work.testing.PC))
+varImpPlot(modFit_noUser$finalModel)
+```
+
+With fewer features, the second model took less time to complute but it was still on the order of 45 minutes.  The out of sample error for thes second model is estimated to be:
+
+`1-0.9798 = 0.0202`
+
+or about 2%.  This slightly more accurate model was used to predict parameters for the project test set and write them to files to be submitted, producing a perfect score when evelauted by the automated testing mechanism.
+
+```{r write_results}
+  test.results.no_user <- predict(modFit_noUser,final.testing.PC)
+  print(test.results.no_user)
+  pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+      filename = paste0("./results/problem_id_",i,".txt")
+      write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+  }
+  pml_write_files(test.results.no_user)
+```
+
+# Conclusion
+
+In this study, accuracy was a key concern as a major portion of the marking scheme for the course was depenent on achieving correct results from the project test data set.  Although accurate, the random forests algorithm proved to be time consuming.  For simpler datasets or real time applications, random forests should probably be subsituted for simpler machine learning algorithms that feature a lower solution time.  Also, it may be possible to lower computation times by tuning algorithm parameters to remove unnecessary computation.
