@@ -142,7 +142,7 @@ qplot(work.training.PC$PC1,work.training.PC$PC2,color=work.classe.training)
 ![](Project_files/figure-html/sample_primary_features_plot-1.png) 
 
 
-To determine an optimum classification tree the random forests algorithm was employed with all primary components and the user name included:
+To determine an optimum classification tree the random forests algorithm was employed with all computed primary components and the user name included:
 
 
 ```r
@@ -259,7 +259,7 @@ confusionMatrix(work.classe.testing,predict(modFit,work.testing.PC))
 
 The out of sample error estimate suggested above from the work testing dataset is:
 
-1 - Accuracy = 1 - 0.9753 = 0.0247
+`1 - Accuracy = 1 - 0.9753 = 0.0247`
 
 Or about 2.5%.  To assess the importance of each of the features to the model, take a look at their Gini importance decrease:
 
@@ -387,7 +387,7 @@ varImpPlot(modFit_noUser$finalModel)
 
 ![](Project_files/figure-html/display_model_2_results-1.png) 
 
-With fewer features, the second model took less time to complute but it was still on the order of 45 minutes.  The out of sample error for thes second model is estimated to be:
+With fewer features, the second model took less time to compute but it was still on the order of 45 minutes.  The out of sample error for thes second model is estimated to be:
 
 `1-0.9798 = 0.0202`
 
